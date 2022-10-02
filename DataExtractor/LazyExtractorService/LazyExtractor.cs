@@ -4,11 +4,14 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using MongoDB.Driver;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
 
 namespace HHVacansisETL {
   public class LazyExtractorConfig {
     public string stateDataPath { get; set; } = "extractor_state";
-    public string elasticSearchURI {get; set;} = "http://localhost:9200";
+    public string mongoDBURI {get; set;} = "mongodb://localhost:9200";
     public string databaseName {get; set;} = "hh_vacations";
     public string sourceUrl {get; set;} = "https://api.hh.ru";
     public uint workers {get; set; } = 1;
@@ -17,7 +20,7 @@ namespace HHVacansisETL {
   public class HHLazyExtractor : IHostedService, IDisposable {
     private readonly ILogger _logger;
     private readonly IOptions<LazyExtractorConfig> _config;
-    //private readonly IMongoDatabase _db;
+    private readonly IMongoDatabase _db;
     
     private static HHLazyExtractor _instance = null;
     private static readonly object _padlock = new object();
@@ -27,9 +30,8 @@ namespace HHVacansisETL {
       _logger = logger;
       _config = config;
 
-      //var mongoClient = new MongoClient(_config.Value.elasticSearchURI);
-      //_db = mongoClient.GetDatabase(_config.Value.databaseName);
-      
+      var mongoClient = new MongoClient(_config.Value.mongoDBURI);
+      _db = mongoClient.GetDatabase(_config.Value.databaseName);
     }
 
     private IEnumerable<List<List<uint>>> GetIdBatches() {
@@ -68,8 +70,10 @@ namespace HHVacansisETL {
           }
           responseJson = await response.Content.ReadAsStringAsync();
         }
-        Console.Write(responseJson);
-        //var products = new List<BsonDocument>()
+
+        var collection = _db.GetCollection<BsonDocument>("hh_vacancies_RAW");
+        var q = BsonSerializer.Deserialize<BsonDocument>(responseJson);
+        await collection.InsertOneAsync(q);
 
         _logger.LogInformation("extracted vacation with id = " + vacationId);
       }
