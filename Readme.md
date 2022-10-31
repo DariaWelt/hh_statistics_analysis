@@ -1,8 +1,3 @@
-## Dependencies
-- dotnet 6.0
-- mongodb 6.0.1
-- mongosh 1.6.0
-
 ## Run
 1. start MongoDB on port 9200
   ```
@@ -18,12 +13,15 @@ mongosh "mongodb://localhost:9200"
 use hh_vacations
 exit
 ```
-3. compile and start LazyExtractor
+start LazyExtractor
 ```
-cd DataExtractor
-dotnet build LazyExtractorService --output ./build_output    
-dotnet ./build_output/LazyExtractorService.dll --LazyExtractor:workers=5
+nohup python -m hh_analyzer.ExtractorService.LazyExtractor -w 5  > lazy_extractor.log &
 ```
+run MonthExtractor
+```
+python -m hh_analyzer.ExtractorService.MonthExtractor -w 5
+```
+
 4. enjoy with results
 ```
 mongosh "mongodb://localhost:9200"
