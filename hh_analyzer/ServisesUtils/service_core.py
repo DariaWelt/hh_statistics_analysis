@@ -3,7 +3,7 @@ import os.path
 from argparse import ArgumentParser, Namespace, ArgumentError
 from abc import abstractmethod
 
-from hh_analyzer.utils import CONFIG_PATH
+from .utils import CONFIG_PATH
 
 
 class HHService:

@@ -1,6 +1,6 @@
 import asyncio
 from argparse import Namespace, ArgumentParser
-from asyncio import BaseEventLoop, get_event_loop, gather, new_event_loop, set_event_loop, create_task
+from asyncio import gather
 from datetime import datetime, timedelta
 from math import ceil
 from typing import List, Dict
@@ -9,8 +9,8 @@ import aiohttp
 from pymongo import MongoClient
 from pymongo.database import Database
 
-from hh_analyzer.service_core import HHService
-from hh_analyzer.utils import load_config, matched_specializations
+from hh_analyzer.ServisesUtils.service_core import HHService
+from hh_analyzer.ServisesUtils.utils import load_config, matched_specializations
 
 
 class MonthExtractor(HHService):
@@ -37,7 +37,7 @@ class MonthExtractor(HHService):
         batches = [[ids[j] for j in range(i * batch_size, (i + 1) * batch_size)] for i in range(self._workers)]
         await gather(*(self._extract_speciality_records(ids) for ids in batches))
 
-    def _check_vacation_exist(self, vac_id) -> bool:
+    def _check_vacancy_exist(self, vac_id) -> bool:
         records = self._mongodb[self._collection_name].find({"id": vac_id})
         try:
             records.next()
@@ -69,7 +69,7 @@ class MonthExtractor(HHService):
                     data = await self._get_request(self._sourceUrl, params)
                     if not data:
                         break
-                    to_add = list(filter(lambda vac: (not self._check_vacation_exist(vac["id"])), data["items"]))
+                    to_add = list(filter(lambda vac: (not self._check_vacancy_exist(vac["id"])), data["items"]))
                     if len(to_add) > 0:
                         self._mongodb[self._collection_name].insert_many(to_add)
                         print(f"added {len(to_add)} vacancies")

@@ -7,10 +7,10 @@
   ```
   mongorestore -db --port 9200 ./backups/<DATE>
   ```
-3. create database "vacations" inside mongoDB
+3. create database "vacancies" inside mongoDB
 ```
 mongosh "mongodb://localhost:9200"
-use hh_vacations
+use hh_vacancies
 exit
 ```
 start LazyExtractor
@@ -25,7 +25,7 @@ python -m hh_analyzer.ExtractorService.MonthExtractor -w 5
 4. enjoy with results
 ```
 mongosh "mongodb://localhost:9200"
-use hh_vacations
+use hh_vacancies
 db.hh_vacancies_RAW.find().pretty()
 exit
 ```

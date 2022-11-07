@@ -1,0 +1,66 @@
+version: '2'
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - 22181:2181
+  
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - zookeeper
+    ports:
+      - 29092:29092
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  db:
+    image: mongo:4.0.8
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: hh_vacancies
+      MONGODB_DATA_DIR: /data/db
+      MONDODB_LOG_DIR: /dev/null
+    ports:
+      - 27017:9200
+    volumes:
+      - mongodbdata:/data/db
+    networks:
+      - backend
+
+  extractor:
+    build: ./hh_analyzer/ExtracrorService
+    depends_on:
+      - mongodb
+    environment:
+      DB_URI: mongodb://db
+      DATABASE_NAME: hh_vacancies
+      EXTRACTOR_KAFKA_THEME: extract
+    volumes:
+      - extractor_logs:/log
+    networks:
+      - backend
+
+  user_app:
+    build: ./hh_analyzer/UserApp
+    environment:
+      DB_URI: mongodb://db
+      DATABASE_NAME: hh_vacancies
+      EXTRACTOR_KAFKA_THEME: extract
+    volumes:
+      - frontend:/app
+    ports:
+      - 8900:8900
+
+volumes:
+  mongodbdata:
+  extractor_logs:
+  frontend:
