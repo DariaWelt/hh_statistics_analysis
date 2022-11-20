@@ -1,11 +1,14 @@
 from os import environ as env
 
 import dash
+import numpy as np
 from dash import html, dcc, Output, Input, State
 from kafka import KafkaProducer, KafkaConsumer
 from pymongo import MongoClient
+import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from plotly import express
 
 from hh_analyzer.ServisesUtils import DB_URI_STR, DB_NAME_STR, EXTRACTOR_THEME_STR, PROCESSING_THEME_STR, KAFKA_PORT_STR
 from hh_analyzer.ServisesUtils.service_core import HHService
@@ -25,10 +28,15 @@ class UserInterface(HHService):
     _dash_app: dash.Dash
 
     TEST_DATA_PART = 23.4
-    TEST_DATA_SALARY = [[[112000, 78000, 30000, 82000, 200000, 150000], [100000, 50000, 20000, 30000, 40000], 'delphy'],
-                        [[130000, 50000, 30000, 62000, 20000, 200000], [100000, 150000, 200000, 30000, 63000], 'python'],
-                        [[112000, 78000, 30000, 82000, 20000, 150000], [200000, 150000, 20000, 112000, 40000], 'opengl'],
-                        ]
+    TEST_DATA_SALARY = {
+        'technologies': ['delphy', 'python', 'opengl'],
+        'without': [np.mean([112000, 78000, 30000, 82000, 200000, 150000]),
+                    np.mean([130000, 50000, 30000, 62000, 20000, 200000]),
+                    np.mean([112000, 78000, 30000, 82000, 20000, 150000])],
+        'with': [np.mean([100000, 50000, 20000, 30000, 40000]),
+                 np.mean([100000, 150000, 200000, 30000, 63000]),
+                 np.mean([200000, 150000, 20000, 112000, 40000])]
+    }
 
     def __init__(self):
         super(UserInterface, self).__init__('hh_user_interface', '../../gui_logs/')
@@ -111,12 +119,31 @@ class UserInterface(HHService):
                                                 textinfo='none',
                                                 hole=.6,
                                                 marker_colors=['rgb(36, 73, 147)', 'rgb(256, 256, 256)'])])
-        vac_percentage.update_layout(title_text="Part of vacancies where technology is required",
-                                     annotations=[dict(text=f'{self.TEST_DATA_PART}%', x=0.18, y=0.5, font_size=20)])
+
+        bar_fig = express.bar(self.TEST_DATA_SALARY, x='technologies', y='with',
+                      barmode='stack', text='technologies')
+        bar_fig.update_layout(title="Salaries distribution over technologies",
+                           xaxis_title='technology',
+                           yaxis_title='Salary', width=800)
+        bar_fig.update_traces(texttemplate='%{text:.2s}', textposition='inside')
+
+        correlation_fig = express.imshow([[0.2, 0.1, 0.6, 0.9],
+                                          [0.3, 0.6, 0.9, 0.2],
+                                          [0.5, 0.2, 0.4, 0.5],
+                                          [0.1, 0.1, 0.6, 0.1]], text_auto=True)
 
         self._dash_app.layout = html.Div([
             self._dash_app.layout,
-            dcc.Graph(figure=vac_percentage),
+            html.Div(className='row',  # Define the row element
+                     children=[
+                         html.Div(className='histogramm', children=dcc.Graph(figure=bar_fig),
+                                  style={'width': '69%', 'display': 'inline-block'}),  # Define the left element
+                         html.Div(className='pie chart', children=dcc.Graph(figure=vac_percentage),
+                                  style={'width': '29%', 'display': 'inline-block'})  # Define the right element
+                     ]),
+            html.Div(className='correlation_matrix',
+                     children=dcc.Graph(figure=correlation_fig))
+
         ])
 
     def update_dashboard(self):

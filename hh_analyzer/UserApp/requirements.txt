@@ -4,3 +4,4 @@ dash_core_components
 plotly
 python-dotenv
 kafka-python
+pandas
