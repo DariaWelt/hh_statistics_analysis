@@ -2,29 +2,35 @@ version: '2'
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:latest
+    networks:
+      - hh_analyzer
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
     ports:
-      - 22181:2181
+      - 2181:2181
   
   kafka:
     image: confluentinc/cp-kafka:latest
+    networks:
+      - hh_analyzer
     depends_on:
       - zookeeper
     ports:
-      - 29092:29092
+      - 9092:9092
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT_INTERNAL://kafka:29092,PLAINTEXT://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
   db:
     image: mongo:4.0.8
     restart: unless-stopped
+    networks:
+      - hh_analyzer
     environment:
       MONGO_INITDB_DATABASE: hh_vacancies
       MONGODB_DATA_DIR: /data/db
@@ -33,34 +39,41 @@ services:
       - 27017:9200
     volumes:
       - mongodbdata:/data/db
-    networks:
-      - backend
 
   extractor:
-    build: ./hh_analyzer/ExtracrorService
-    depends_on:
-      - mongodb
-    environment:
-      DB_URI: mongodb://db
-      DATABASE_NAME: hh_vacancies
-      EXTRACTOR_KAFKA_THEME: extract
-    volumes:
-      - extractor_logs:/log
+    build:
+      context: ./hh_analyzer/
+      dockerfile: ./ExtractorDockerfile.dockerfile
     networks:
-      - backend
-
-  user_app:
-    build: ./hh_analyzer/UserApp
+      - hh_analyzer
+    depends_on:
+      - db
+      - kafka
     environment:
-      DB_URI: mongodb://db
-      DATABASE_NAME: hh_vacancies
-      EXTRACTOR_KAFKA_THEME: extract
+      HHS_DB_URI: mongodb://db
+      HHS_DATABASE_NAME: hh_vacancies
+      HHS_EXTRACTOR_KAFKA_THEME: extract
+      HHS_KAFKA_PORT: kafka:29092
     volumes:
-      - frontend:/app
-    ports:
-      - 8900:8900
+      - ./extractor_logs/:/log/
+      - ./hh_analyzer/ServisesUtils:/ServisesUtilsdocke
+
+#  user_app:
+#    build: ./hh_analyzer/UserApp
+#    environment:
+#      HHS_DB_URI: mongodb://db
+#      HHS_DATABASE_NAME: hh_vacancies
+#      HHS_EXTRACTOR_KAFKA_THEME: extract
+#    volumes:
+#      - frontend:/app
+#    ports:
+#      - 8900:8900
 
 volumes:
   mongodbdata:
   extractor_logs:
   frontend:
+
+networks:
+  hh_analyzer:
+    driver: bridge

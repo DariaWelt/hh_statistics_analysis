@@ -2,16 +2,19 @@ import logging
 import os.path
 from argparse import ArgumentParser, Namespace, ArgumentError
 from abc import abstractmethod
-
-from .utils import CONFIG_PATH
+from typing import Optional
 
 
 class HHService:
     _logger: logging.Logger
-    _config_path: str
+    _config_path: Optional[str]
 
-    def __init__(self, name: str = 'hh_service'):
+    def __init__(self, name: str = 'hh_service', log_dir: str = '/log'):
         self._logger = logging.Logger(name)
+        fh = logging.FileHandler(f'{log_dir}/{name}.log')
+        fh.setFormatter(logging.Formatter("%(asctime)s:%(name)s:%(levelname)s:%(message)s"))
+        self._logger.addHandler(fh)
+
         self.parse_args()
         self._configure()
 
@@ -19,7 +22,7 @@ class HHService:
         parser = self._get_parser()
         namespace = parser.parse_args()
         self._validate_parsed_args(namespace)
-        self._config_path = namespace.config if namespace.config is not None else CONFIG_PATH
+        self._config_path = namespace.config
         return namespace
 
     def run(self):

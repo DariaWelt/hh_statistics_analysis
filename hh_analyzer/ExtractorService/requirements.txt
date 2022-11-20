@@ -1,0 +1,4 @@
+pymongo
+aiohttp
+python-dotenv
+kafka-python

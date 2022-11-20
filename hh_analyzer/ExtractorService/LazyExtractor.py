@@ -1,12 +1,15 @@
+import asyncio
 import os.path
 from argparse import Namespace, ArgumentParser
 from asyncio import BaseEventLoop, get_event_loop, gather
+from os import environ as env
 from typing import Iterable, List
 
 import aiohttp as aiohttp
 from pymongo import MongoClient
 from pymongo.database import Database
 
+from ..ServisesUtils import DB_NAME_STR, DB_URI_STR
 from ..ServisesUtils.service_core import HHService
 from ..ServisesUtils.utils import load_config, matched_specializations
 
@@ -31,7 +34,14 @@ class LazyExtractor(HHService):
     def run(self):
         async def process_batch(ids: List[int]):
             for i in ids:
-                await self._extract_vacancy(i)
+                processed = False
+                while not processed:
+                    try:
+                        await self._extract_vacancy(i)
+                        processed = True
+                    except Exception as err:
+                        self._logger.warning(f"exception occured: {err}")
+                        await asyncio.sleep(10)
             id = 0
             try:
                 with open(self._state_data_path, 'r') as f:
@@ -89,9 +99,13 @@ class LazyExtractor(HHService):
         super(LazyExtractor, self)._validate_parsed_args(args)
 
     def _configure(self):
-        config_data = load_config(self._config_path)
-        mongodb_uri = config_data['mongodb_uri']
-        database_name = config_data['extractors_database']
+        if self._config_path:
+            config_data = load_config(self._config_path)
+            mongodb_uri = config_data['mongodb_uri']
+            database_name = config_data['hh_vac_database']
+        else:
+            mongodb_uri = env[DB_URI_STR]
+            database_name = env[DB_NAME_STR]
         self._mongodb = MongoClient(mongodb_uri)[database_name]
 
         if os.path.exists(self._state_data_path) and os.path.isfile(self._state_data_path):
