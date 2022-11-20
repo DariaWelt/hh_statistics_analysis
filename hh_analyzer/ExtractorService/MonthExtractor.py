@@ -41,8 +41,15 @@ class MonthExtractor(HHService):
     async def listen_messages(self):
         t = 3
         self._logger.info(f"listen to topic '{self._kafka_theme}'")
+        last_updated = datetime.now() - timedelta(hours=12)
         for message in self._kafka_consumer:
             self._logger.info(f"got {message.topic}: message '{message.value}'")
+
+            if datetime.now() - last_updated <= timedelta(minutes=5):
+                self._logger.info("fresh data is already stored in database, skipping extraction")
+                self._kafka_producer.send(f'resp_{self._kafka_theme}', b'ok_' + message.value)
+                break
+
             for i in range(t):
                 try:
                     await asyncio.create_task(self._extract_monthly_records())
@@ -55,6 +62,7 @@ class MonthExtractor(HHService):
                         self._logger.error(f"run failed: got exception '{err}'")
                         self._kafka_producer.send(f'resp_{self._kafka_theme}', b'failed_' + message.value)
                     await asyncio.sleep(10)
+            last_updated = datetime.now()
 
     async def _extract_monthly_records(self):
         ids = await self._get_specialities_ids()
