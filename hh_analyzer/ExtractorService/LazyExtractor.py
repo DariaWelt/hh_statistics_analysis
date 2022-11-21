@@ -1,14 +1,17 @@
+import asyncio
 import os.path
 from argparse import Namespace, ArgumentParser
 from asyncio import BaseEventLoop, get_event_loop, gather
+from os import environ as env
 from typing import Iterable, List
 
 import aiohttp as aiohttp
 from pymongo import MongoClient
 from pymongo.database import Database
 
-from hh_analyzer.service_core import HHService
-from hh_analyzer.utils import load_config, matched_specializations
+from ..ServisesUtils import DB_NAME_STR, DB_URI_STR
+from ..ServisesUtils.service_core import HHService
+from ..ServisesUtils.utils import load_config, matched_specializations
 
 
 class LazyExtractor(HHService):
@@ -31,7 +34,23 @@ class LazyExtractor(HHService):
     def run(self):
         async def process_batch(ids: List[int]):
             for i in ids:
-                await self._extract_vacation(i)
+                processed = False
+                while not processed:
+                    try:
+                        await self._extract_vacancy(i)
+                        processed = True
+                    except Exception as err:
+                        self._logger.warning(f"exception occured: {err}")
+                        await asyncio.sleep(10)
+            id = 0
+            try:
+                with open(self._state_data_path, 'r') as f:
+                    id = int(f.readline().replace('\n', ''))
+            except:
+                pass
+            if self._current_id_to_read > id:
+                with open(self._state_data_path, 'w') as f:
+                    f.write(str(self._current_id_to_read))
 
         for batch in self._get_batches():
             loop: BaseEventLoop = get_event_loop()
@@ -51,24 +70,24 @@ class LazyExtractor(HHService):
             self._logger.info(f"prepared to process ids from {start_id} to {self._current_id_to_read}")
             yield batches
 
-    async def _extract_vacation(self, vacation_id: int):
+    async def _extract_vacancy(self, vacancy_id: int):
         async with aiohttp.ClientSession() as session:
-            async with session.get(f'{self._sourceUrl}/{vacation_id}') as resp:
+            async with session.get(f'{self._sourceUrl}/{vacancy_id}') as resp:
                 if resp.ok:
                     vac = await resp.json()
                     records = self._mongodb[self._collection_name].find({"id": vac["id"]})
                     try:
                         records.next()
-                        self._logger.warning(f"vacation with id = {vacation_id} already exists")
+                        self._logger.warning(f"vacancy with id = {vacancy_id} already exists")
                         return
                     except:
                         if matched_specializations(vac.get("specializations")):
                             self._mongodb[self._collection_name].insert_one(vac)
-                            self._logger.info(f"vacation with id = {vacation_id} was loaded")
+                            self._logger.info(f"vacancy with id = {vacancy_id} was loaded")
                         else:
-                            self._logger.warning(f"vacation with id = {vacation_id} was not loaded: specializations not matched")
+                            self._logger.warning(f"vacancy with id = {vacancy_id} was not loaded: specializations not matched")
                 else:
-                    self._logger.warning(f"no vacation with id = {vacation_id}")
+                    self._logger.warning(f"no vacancy with id = {vacancy_id}")
 
     def _get_parser(self) -> ArgumentParser:
         parser = super(LazyExtractor, self)._get_parser()
@@ -80,9 +99,13 @@ class LazyExtractor(HHService):
         super(LazyExtractor, self)._validate_parsed_args(args)
 
     def _configure(self):
-        config_data = load_config(self._config_path)
-        mongodb_uri = config_data['mongodb_uri']
-        database_name = config_data['extractors_database']
+        if self._config_path:
+            config_data = load_config(self._config_path)
+            mongodb_uri = config_data['mongodb_uri']
+            database_name = config_data['hh_vac_database']
+        else:
+            mongodb_uri = env[DB_URI_STR]
+            database_name = env[DB_NAME_STR]
         self._mongodb = MongoClient(mongodb_uri)[database_name]
 
         if os.path.exists(self._state_data_path) and os.path.isfile(self._state_data_path):
