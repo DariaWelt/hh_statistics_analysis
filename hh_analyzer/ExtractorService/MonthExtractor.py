@@ -1,16 +1,20 @@
 import asyncio
+import os
 from argparse import Namespace, ArgumentParser
-from asyncio import BaseEventLoop, get_event_loop, gather, new_event_loop, set_event_loop, create_task
+from asyncio import gather
 from datetime import datetime, timedelta
 from math import ceil
+from os import environ as env
 from typing import List, Dict
 
 import aiohttp
 from pymongo import MongoClient
 from pymongo.database import Database
+from kafka import KafkaProducer, KafkaConsumer
 
-from hh_analyzer.service_core import HHService
-from hh_analyzer.utils import load_config, matched_specializations
+from hh_analyzer.ServisesUtils import DB_URI_STR, DB_NAME_STR, EXTRACTOR_THEME_STR, KAFKA_PORT_STR
+from hh_analyzer.ServisesUtils.service_core import HHService
+from hh_analyzer.ServisesUtils.utils import load_config, matched_specializations
 
 
 class MonthExtractor(HHService):
@@ -18,26 +22,59 @@ class MonthExtractor(HHService):
     _collection_name: str = 'hh_vacancies_RAW'
     _sourceUrl: str = 'https://api.hh.ru/vacancies'
     _workers: int
+    _kafka_theme: str
+    _kafka_port: str
 
     def __init__(self):
         super(MonthExtractor, self).__init__('hh_month_extractor')
+        self._kafka_producer = KafkaProducer(bootstrap_servers=self._kafka_port, api_version=(0, 10))
+        self._kafka_consumer = KafkaConsumer(self._kafka_theme, bootstrap_servers=self._kafka_port,
+                                             auto_offset_reset='earliest', api_version=(0, 10))
 
-    # TODO: add kafka parameters setting
     def parse_args(self):
         namespace = super(MonthExtractor, self).parse_args()
         self._workers = max(1, namespace.workers)
 
-    #TODO: add listening to kafka producer
     def run(self):
-        asyncio.run(self._extract_monthly_records())
+        asyncio.run(self.listen_messages())
+
+    async def listen_messages(self):
+        t = 3
+        self._logger.info(f"listen to topic '{self._kafka_theme}'")
+        last_updated = datetime.now() - timedelta(hours=12)
+        for message in self._kafka_consumer:
+            self._logger.info(f"got {message.topic}: message '{message.value}'")
+
+            if datetime.now() - last_updated <= timedelta(minutes=5):
+                self._logger.info("fresh data is already stored in database, skipping extraction")
+                self._kafka_producer.send(f'resp_{self._kafka_theme}', b'ok_' + message.value)
+                break
+
+            for i in range(t):
+                try:
+                    await asyncio.create_task(self._extract_monthly_records())
+                    self._kafka_producer.send(f'resp_{self._kafka_theme}', b'ok_' + message.value)
+                    break
+                except Exception as err:
+                    if i + 1 < t:
+                        self._logger.warning(f"got exception '{err}' during run. retrying...({i + 1}/{t})")
+                    else:
+                        self._logger.error(f"run failed: got exception '{err}'")
+                        self._kafka_producer.send(f'resp_{self._kafka_theme}', b'failed_' + message.value)
+                    await asyncio.sleep(10)
+            last_updated = datetime.now()
 
     async def _extract_monthly_records(self):
         ids = await self._get_specialities_ids()
+        spec_num = len(ids)
         batch_size = ceil(len(ids) / self._workers)
-        batches = [[ids[j] for j in range(i * batch_size, (i + 1) * batch_size)] for i in range(self._workers)]
+        batches = [[
+            ids[j] for j in range(i * batch_size, (i + 1) * batch_size) if j < spec_num
+            ] for i in range(self._workers) if i * batch_size < spec_num
+        ]
         await gather(*(self._extract_speciality_records(ids) for ids in batches))
 
-    def _check_vacation_exist(self, vac_id) -> bool:
+    def _check_vacancy_exist(self, vac_id) -> bool:
         records = self._mongodb[self._collection_name].find({"id": vac_id})
         try:
             records.next()
@@ -69,14 +106,15 @@ class MonthExtractor(HHService):
                     data = await self._get_request(self._sourceUrl, params)
                     if not data:
                         break
-                    to_add = list(filter(lambda vac: (not self._check_vacation_exist(vac["id"])), data["items"]))
+                    to_add = list(filter(lambda vac: (not self._check_vacancy_exist(vac["id"])), data["items"]))
                     if len(to_add) > 0:
                         self._mongodb[self._collection_name].insert_many(to_add)
-                        print(f"added {len(to_add)} vacancies")
+                        self._logger.info(f"added {len(to_add)} vacancies")
 
                     params["page"] = data["page"] + 1
                     if data["pages"] - data["page"] <= 1:
                         break
+                    await asyncio.sleep(10)
                 time_readed = time_readed - interval
 
     async def _get_specialities_ids(self) -> List[str]:
@@ -108,9 +146,16 @@ class MonthExtractor(HHService):
         super(MonthExtractor, self)._validate_parsed_args(args)
 
     def _configure(self):
-        config_data = load_config(self._config_path)
-        mongodb_uri = config_data['mongodb_uri']
-        database_name = config_data['extractors_database']
+        if self._config_path:
+            config_data = load_config(self._config_path)
+            mongodb_uri = config_data['mongodb_uri']
+            database_name = config_data['hh_vac_database']
+        else:
+            mongodb_uri = os.getenv(DB_URI_STR)
+            database_name = env[DB_NAME_STR]
+
+        self._kafka_theme = env[EXTRACTOR_THEME_STR]
+        self._kafka_port = os.getenv(KAFKA_PORT_STR)
         self._mongodb = MongoClient(mongodb_uri)[database_name]
 
 
