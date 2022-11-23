@@ -1,0 +1,77 @@
+{
+  "data": [
+    {
+      "title": "Доля вакансий, в которых требуется технология",
+      "units": "%",
+      "technology_data": [
+        {
+          "name": "python",
+          "value": 24
+        }
+      ]
+    },
+    {
+      "title": "Корреляция требуемых технологий среди вакансий",
+      "units": "",
+      "technology_data": [
+        {
+          "name": "python",
+          "value": {
+            "cpp": 0.2,
+            "flask": 0.9
+          }
+        },
+        {
+          "name": "cpp",
+          "value": {
+            "python": 0.2,
+            "flask": 0.1
+          }
+        },
+        {
+          "name": "flask",
+          "value": {
+            "cpp": 0.1,
+            "python": 0.9
+          }
+        }
+      ]
+    },
+    {
+      "title": "Средняя зарплата вакансий с данной технологией",
+      "units": "руб.",
+      "technology_data": [
+        {
+          "name": "python",
+          "value": 80000
+        },
+        {
+          "name": "cpp",
+          "value": 87000
+        },
+        {
+          "name": "sql",
+          "value": 59000
+        }
+      ]
+    },
+    {
+      "title": "Прирост зарплаты при знании технологии",
+      "units": "%",
+      "technology_data": [
+        {
+          "name": "python",
+          "value": 50
+        },
+        {
+          "name": "cpp",
+          "value": 30
+        },
+        {
+          "name": "sql",
+          "value": 40
+        }
+      ]
+    }
+  ]
+}
