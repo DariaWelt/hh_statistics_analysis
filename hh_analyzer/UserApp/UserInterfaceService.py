@@ -1,5 +1,6 @@
+import json
 from os import environ as env
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 import dash
 import numpy as np
@@ -15,11 +16,13 @@ from hh_analyzer.ServisesUtils import DB_URI_STR, DB_NAME_STR, EXTRACTOR_THEME_S
 from hh_analyzer.ServisesUtils.service_core import HHService
 from hh_analyzer.ServisesUtils.utils import load_config
 
+
 class UserInterface(HHService):
     _kafka_port: str
     _extractor_kafka_theme: str
     _processing_kafka_theme: str
-    _kafka_consumer: KafkaConsumer
+    _extractor_consumer: KafkaConsumer
+    _processing_consumer: KafkaConsumer
     _kafka_producer: KafkaProducer
 
     _waiting_for_processing: bool
@@ -27,6 +30,8 @@ class UserInterface(HHService):
 
     _collection_name: str = 'hh_vacancies_processed'
     _dash_app: dash.Dash
+
+    _data: Dict
 
     TEST_DATA_PART = 23.4
     TEST_DATA_SALARY = {
@@ -45,13 +50,12 @@ class UserInterface(HHService):
         self._kafka_producer = KafkaProducer(bootstrap_servers=self._kafka_port, api_version=(0, 10))
 
         # consumers to listen to responses
-        self._kafka_consumer = KafkaConsumer(bootstrap_servers=self._kafka_port, auto_offset_reset='earliest',
-                                             api_version=(0,10))
-        self._kafka_consumer.subscribe([f'resp_{self._extractor_kafka_theme}',
-                                        f'resp_{self._processing_kafka_theme}',
-                                        ])
-        self._waiting_for_processing = False
-        self._waiting_for_extractor = False
+        self._extractor_consumer = KafkaConsumer(f'resp_{self._extractor_kafka_theme}',
+                                                 bootstrap_servers=self._kafka_port, auto_offset_reset='earliest',
+                                                 api_version=(0, 10))
+        self._processing_consumer = KafkaConsumer(f'resp_{self._processing_kafka_theme}',
+                                                  bootstrap_servers=self._kafka_port, auto_offset_reset='earliest',
+                                                  api_version=(0, 10))
 
         self.add_extractor_button()
         self.add_processor_button()
@@ -74,8 +78,8 @@ class UserInterface(HHService):
             self._kafka_producer.send(self._extractor_kafka_theme, b'monthly')
             self._kafka_producer.flush()
             self._logger.info(f"sent to {self._extractor_kafka_theme}: message 'monthly'")
-            self._waiting_for_extractor = True
-            self.wait_for_response()
+            msg = next(self._extractor_consumer)
+            self._logger.info(f"got {msg.topic}: message {msg.value}")
             return n_clicks
 
     def add_processor_button(self):
@@ -104,22 +108,34 @@ class UserInterface(HHService):
             State('input-on-processing-button', 'value')
         )
         def call_processing(n_clicks, value):
-            self._logger.info(f"preparing to send {self._processing_kafka_theme}: message '{value}'")
-            self._kafka_producer.send(self._processing_kafka_theme, value.encode('utf-8'))
-            self._kafka_producer.flush()
-            self._logger.info(f"sent to {self._processing_kafka_theme}: message '{value}'")
-            self._waiting_for_processing = True
-            return self.wait_for_response()
-
-    def wait_for_response(self):
-        for message in self._kafka_consumer:
-            self._logger.info(f"got {message.topic}: message '{message.value}'")
-            if message.topic == f'resp_{self._extractor_kafka_theme}':
-                self._waiting_for_extractor = False
-                return 1
-            if message.topic == f'resp_{self._processing_kafka_theme}':
-                self._waiting_for_processing = False
+            if value is None:
                 return self.get_dashboard()
+
+            # debug code
+            consumer = KafkaConsumer(self._processing_kafka_theme, bootstrap_servers=self._kafka_port,
+                                     api_version=(0, 10), auto_offset_reset='earliest')
+            # end of debug code
+
+            strings = value.split(';')
+            message = {'data': strings}
+            self._kafka_producer.send(self._processing_kafka_theme, json.dumps(message).encode('utf-8'))
+            self._kafka_producer.flush()
+            self._logger.info(f"sent to {self._processing_kafka_theme}: message '{message}'")
+
+            # debug code
+            # TODO: remove when handler will be connected
+            self._logger.info(f'processing got message {next(consumer).value}')
+            producer = KafkaProducer(bootstrap_servers=self._kafka_port, api_version=(0, 10))
+            with open('processing_response_example.json', 'r') as f:
+                self._logger.info('PUK')
+                producer.send(f'resp_{self._processing_kafka_theme}', json.dumps(json.load(f)).encode('utf-8'))
+            # end of debug code
+
+            response = next(self._processing_consumer)
+            self._logger.info(f"got {response.topic}: message {response.value}")
+            data = json.loads(response.value)
+            self._logger.info(f'got response: {data}')
+            return self.get_dashboard(text_file=data)
 
     def add_dashboard(self):
         self._dash_app.layout = html.Div([
@@ -128,8 +144,13 @@ class UserInterface(HHService):
                      children=self.get_dashboard())
         ])
 
-    def get_dashboard(self) -> List[html.Div]:
+    def get_dashboard(self, text_file: Optional[Dict] = None) -> List[html.Div]:
         self._logger.info(f"called dash updating method..")
+        res = []
+        if text_file is not None:
+            self._logger.info(f"adding response text..")
+            res.append(html.Div(html.Plaintext(str(text_file), style={'width': '100%'})))
+
         vac_percentage = go.Figure(data=[go.Pie(values=[self.TEST_DATA_PART, 100 - self.TEST_DATA_PART],
                                                 name="Part of vacancies where technology is required",
                                                 textinfo='none',
@@ -147,7 +168,7 @@ class UserInterface(HHService):
                                           [0.3, 0.6, 0.9, 0.2],
                                           [0.5, 0.2, 0.4, 0.5],
                                           [0.1, 0.1, 0.6, 0.1]], text_auto=True)
-        return [
+        res.extend([
             html.Div(className='row',  # Define the row element
                     children=[
                         html.Div(className='histogramm', children=dcc.Graph(figure=bar_fig),
@@ -156,7 +177,8 @@ class UserInterface(HHService):
                                  style={'width': '29%', 'display': 'inline-block'})
                       ]),
             html.Div(className='correlation_matrix', children=dcc.Graph(figure=correlation_fig))
-        ]
+        ])
+        return res
 
     def _configure(self):
         if self._config_path:
