@@ -16,7 +16,7 @@ class ProcSession:
         .config("spark.mongodb.read.connection.uri", f"{db_url}/{db_name}.{collection}") \
         .config("spark.mongodb.write.connection.uri", f"{db_url}/{db_name}.{collection}") \
         .config(f"spark.jars.packages", "org.mongodb.spark:mongo-spark-connector:10.0.4") \
-        .config('spark.submit.pyFiles', './m.zip')\
+        .config('spark.submit.pyFiles', '/opt/spark/work-dir/app.zip')\
         .getOrCreate()
 
         # load data

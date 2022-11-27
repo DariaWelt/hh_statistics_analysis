@@ -12,7 +12,7 @@ def pipline_init(params: tp.Dict) -> session.ProcPipLine:
     msession = session.ProcSession(
         db_url=params["DB_URL"],
         db_name=params["DB_NAME"],
-        collection=["DB_COLLECTION"]
+        collection=params["DB_COLLECTION"]
     )
     mpipline = session.ProcPipLine()
 
@@ -33,12 +33,13 @@ def pipline_init(params: tp.Dict) -> session.ProcPipLine:
 def kafka_init(params: tp.Dict):
 
     concumer = kafka.KafkaConsumer(
+        (params["SEND_TOPIC"]),
         bootstrap_servers=[params["KAFKA_DOM"]],
-        value_serializer=lambda x:
+        value_deserializer=lambda x:
         json.loads(x))
+    #concumer.subscribe([params["SEND_TOPIC"]])
 
     producer = kafka.KafkaProducer(
-        os.environ["SEND_TOPIC"],
         bootstrap_servers=[params["KAFKA_DOM"]],
         value_serializer=lambda x:
         json.dumps(x).encode('utf-8'))
@@ -52,7 +53,7 @@ def proc_loop(mpipline: session.ProcPipLine,
     
     while(True):
         msg = next(concumer)
-        in_data = msg.get("data")
+        in_data = msg.value.get("data")
         out_data = mpipline.run(in_data)
         producer.send(p_topic, value=out_data)
 
@@ -65,4 +66,6 @@ def main():
 
     proc_loop(mpipline, producer, concumer, p_topic)
 
+if __name__ == "__main__":
+    main()
 

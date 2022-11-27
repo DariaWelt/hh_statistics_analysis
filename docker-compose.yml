@@ -35,8 +35,8 @@ services:
       MONGO_INITDB_DATABASE: hh_vacancies
       MONGODB_DATA_DIR: /data/db
       MONDODB_LOG_DIR: /dev/null
-    ports:
-      - 27017:9200
+    # ports:
+    #   - 27017:9200
     volumes:
       - mongodbdata:/data/db
 
@@ -70,23 +70,22 @@ services:
 #      - 8900:8900
 
   pyspark:
-    image: apache/spark-py
+    build: ./hh_analyzer/Handler
     container_name: handler
     user: root
     volumes: 
       - ./hh_analyzer/Handler:/opt/spark/work-dir
-    ports:
-      - 19090:19090
     entrypoint: /opt/spark/work-dir/main.sh
-    enviroment:
-      - DB_URL: mongodb://db
-      - DB_NAME: hh_vacations
-      - DB_COLLECTION: hh_vacancies_RAW
-      - SPARK_APP: /opt/spark/work-dir/hmain.py 
-
-      - SEND_TOPIC: processing
-      - RESP_SEND_TOPIC: resp_processing
-      - KAFKA_DOM: kafka:9092
+    networks:
+      - hh_analyzer
+    environment:
+      DB_URL: mongodb://db
+      DB_NAME: hh_vacations
+      DB_COLLECTION: hh_vacancies_RAW
+      SPARK_APP: /opt/spark/work-dir/hmain.py 
+      SEND_TOPIC: processing
+      RESP_SEND_TOPIC: resp_processing
+      KAFKA_DOM: kafka:29092
 
 volumes:
   mongodbdata:
