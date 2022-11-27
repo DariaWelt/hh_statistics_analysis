@@ -38,7 +38,7 @@ services:
     ports:
       - 27017:9200
     volumes:
-      - mongodbdata:/data/db
+      - ./mongodb_data/:/data/db
 
   extractor:
     build:
@@ -58,21 +58,26 @@ services:
       - ./extractor_logs/:/log/
       - ./hh_analyzer/ServisesUtils:/ServisesUtilsdocke
 
-#  user_app:
-#    build: ./hh_analyzer/UserApp
-#    environment:
-#      HHS_DB_URI: mongodb://db
-#      HHS_DATABASE_NAME: hh_vacancies
-#      HHS_EXTRACTOR_KAFKA_THEME: extract
-#    volumes:
-#      - frontend:/app
-#    ports:
-#      - 8900:8900
-
-volumes:
-  mongodbdata:
-  extractor_logs:
-  frontend:
+  user_app:
+    build:
+      context: ./hh_analyzer/
+      dockerfile: ./UIAppDockerfile.dockerfile
+    networks:
+      - hh_analyzer
+    depends_on:
+      - db
+      - kafka
+      - extractor
+    environment:
+      HHS_DB_URI: mongodb://db
+      HHS_DATABASE_NAME: hh_vacancies
+      HHS_EXTRACTOR_KAFKA_THEME: extract
+      HHS_PROCESSING_KAFKA_THEME: process
+      HHS_KAFKA_PORT: kafka:29092
+    volumes:
+      - ./gui_logs/:/log/
+    ports:
+      - 8050:8050
 
 networks:
   hh_analyzer:

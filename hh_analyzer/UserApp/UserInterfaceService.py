@@ -1,4 +1,5 @@
 import json
+import os.path
 from os import environ as env
 from typing import List, Dict, Optional
 
@@ -28,11 +29,12 @@ class UserInterface(HHService):
     _dash_app: dash.Dash
 
     _data: Dict
+    _test_data_path: str = os.path.dirname(__file__) + '/processing_response_example.json'
 
     def __init__(self):
-        super(UserInterface, self).__init__('hh_user_interface', '../../gui_logs/')
+        super(UserInterface, self).__init__('hh_user_interface')
 
-        with open('processing_response_example.json', 'r') as f:
+        with open(self._test_data_path, 'r') as f:
             self._data = json.load(f)
 
         self._dash_app = dash.Dash()
@@ -115,7 +117,7 @@ class UserInterface(HHService):
             # TODO: remove when handler will be connected
             self._logger.info(f'processing got message {next(consumer).value}')
             producer = KafkaProducer(bootstrap_servers=self._kafka_port, api_version=(0, 10))
-            with open('processing_response_example.json', 'r') as f:
+            with open(self._test_data_path, 'r') as f:
                 self._logger.info('PUK')
                 producer.send(f'resp_{self._processing_kafka_theme}', json.dumps(json.load(f)).encode('utf-8'))
             # end of debug code
@@ -170,7 +172,7 @@ class UserInterface(HHService):
         self._mongodb = MongoClient(mongodb_uri)[database_name]
 
     def run(self):
-        self._dash_app.run_server(debug=True)
+        self._dash_app.run_server(host='0.0.0.0', debug=True)
 
 
 if __name__ == '__main__':
