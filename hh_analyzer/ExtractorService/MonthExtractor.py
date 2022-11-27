@@ -29,7 +29,7 @@ class MonthExtractor(HHService):
         super(MonthExtractor, self).__init__('hh_month_extractor')
         self._kafka_producer = KafkaProducer(bootstrap_servers=self._kafka_port, api_version=(0, 10))
         self._kafka_consumer = KafkaConsumer(self._kafka_theme, bootstrap_servers=self._kafka_port,
-                                             auto_offset_reset='earliest', api_version=(0, 10))
+                                             api_version=(0, 10))
 
     def parse_args(self):
         namespace = super(MonthExtractor, self).parse_args()
@@ -54,6 +54,7 @@ class MonthExtractor(HHService):
                 try:
                     await asyncio.create_task(self._extract_monthly_records())
                     self._kafka_producer.send(f'resp_{self._kafka_theme}', b'ok_' + message.value)
+                    self._logger.info("data is updated, ok response sent")
                     break
                 except Exception as err:
                     if i + 1 < t:
@@ -84,7 +85,7 @@ class MonthExtractor(HHService):
 
     @staticmethod
     async def _get_request(url: str, params: Dict) -> Dict:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(trust_env=True) as session:
             async with session.get(url, params=params) as resp:
                 if resp.ok:
                     return await resp.json()
@@ -119,7 +120,7 @@ class MonthExtractor(HHService):
 
     async def _get_specialities_ids(self) -> List[str]:
         result = []
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(trust_env=True) as session:
             async with session.get('https://api.hh.ru/specializations') as resp:
                 if not resp.ok:
                     return result
