@@ -71,7 +71,7 @@ class LazyExtractor(HHService):
             yield batches
 
     async def _extract_vacancy(self, vacancy_id: int):
-        async with aiohttp.ClientSession(trust_env=True) as session:
+        async with aiohttp.ClientSession() as session:
             async with session.get(f'{self._sourceUrl}/{vacancy_id}') as resp:
                 if resp.ok:
                     vac = await resp.json()

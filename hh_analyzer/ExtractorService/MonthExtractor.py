@@ -48,13 +48,13 @@ class MonthExtractor(HHService):
             if datetime.now() - last_updated <= timedelta(minutes=5):
                 self._logger.info("fresh data is already stored in database, skipping extraction")
                 self._kafka_producer.send(f'resp_{self._kafka_theme}', b'ok_' + message.value)
+                self._logger.info("data is updated, ok response sent")
                 break
 
             for i in range(t):
                 try:
                     await asyncio.create_task(self._extract_monthly_records())
                     self._kafka_producer.send(f'resp_{self._kafka_theme}', b'ok_' + message.value)
-                    self._logger.info("data is updated, ok response sent")
                     break
                 except Exception as err:
                     if i + 1 < t:
@@ -85,7 +85,7 @@ class MonthExtractor(HHService):
 
     @staticmethod
     async def _get_request(url: str, params: Dict) -> Dict:
-        async with aiohttp.ClientSession(trust_env=True) as session:
+        async with aiohttp.ClientSession() as session:
             async with session.get(url, params=params) as resp:
                 if resp.ok:
                     return await resp.json()
@@ -94,14 +94,15 @@ class MonthExtractor(HHService):
     async def _extract_speciality_records(self, speciality_ids: List[str]):
         timestamp = datetime.now()
         time_readed = timestamp
-        interval = timedelta(hours=12)
+        interval = timedelta(hours=48)
         for speciality_id in speciality_ids:
             time_readed = timestamp
             while time_readed > timestamp - timedelta(days=31):
                 params = {
                     "specialization": speciality_id,
                     "date_to": time_readed.strftime('%Y-%m-%dT%H:%M:%S'),
-                    "date_from": (time_readed - interval).strftime('%Y-%m-%dT%H:%M:%S')
+                    "date_from": (time_readed - interval).strftime('%Y-%m-%dT%H:%M:%S'),
+                    "per_page": 100
                 }
                 while True:
                     data = await self._get_request(self._sourceUrl, params)
@@ -115,12 +116,11 @@ class MonthExtractor(HHService):
                     params["page"] = data["page"] + 1
                     if data["pages"] - data["page"] <= 1:
                         break
-                    await asyncio.sleep(10)
                 time_readed = time_readed - interval
 
     async def _get_specialities_ids(self) -> List[str]:
         result = []
-        async with aiohttp.ClientSession(trust_env=True) as session:
+        async with aiohttp.ClientSession() as session:
             async with session.get('https://api.hh.ru/specializations') as resp:
                 if not resp.ok:
                     return result

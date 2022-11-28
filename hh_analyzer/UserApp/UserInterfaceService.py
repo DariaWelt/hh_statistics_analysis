@@ -65,6 +65,8 @@ class UserInterface(HHService):
             Input('extract-data', 'n_clicks')
         )
         def call_extractor(n_clicks):
+            if n_clicks < 1:
+                return n_clicks
             self._logger.info(f"preparing to send {self._extractor_kafka_theme}: message 'monthly'")
             self._kafka_producer.send(self._extractor_kafka_theme, b'monthly')
             self._kafka_producer.flush()
@@ -99,28 +101,14 @@ class UserInterface(HHService):
             State('input-on-processing-button', 'value')
         )
         def call_processing(n_clicks, value):
-            if value is None:
+            if value is None or n_clicks < 1:
                 return self.get_dashboard()
-
-            # debug code
-            consumer = KafkaConsumer(self._processing_kafka_theme, bootstrap_servers=self._kafka_port,
-                                     api_version=(0, 10), auto_offset_reset='earliest')
-            # end of debug code
 
             strings = value.split(';')
             message = {'data': strings}
             self._kafka_producer.send(self._processing_kafka_theme, json.dumps(message).encode('utf-8'))
             self._kafka_producer.flush()
             self._logger.info(f"sent to {self._processing_kafka_theme}: message '{message}'")
-
-            # debug code
-            # TODO: remove when handler will be connected
-            self._logger.info(f'processing got message {next(consumer).value}')
-            producer = KafkaProducer(bootstrap_servers=self._kafka_port, api_version=(0, 10))
-            with open(self._test_data_path, 'r') as f:
-                self._logger.info('PUK')
-                producer.send(f'resp_{self._processing_kafka_theme}', json.dumps(json.load(f)).encode('utf-8'))
-            # end of debug code
 
             response = next(self._processing_consumer)
             self._logger.info(f"got {response.topic}: message {response.value}")
