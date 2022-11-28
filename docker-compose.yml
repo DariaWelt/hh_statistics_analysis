@@ -83,8 +83,8 @@ services:
       DB_NAME: hh_vacancies
       DB_COLLECTION: hh_vacancies_RAW
       SPARK_APP: /opt/spark/work-dir/hmain.py 
-      SEND_TOPIC: processing
-      RESP_SEND_TOPIC: resp_processing
+      SEND_TOPIC: process
+      RESP_SEND_TOPIC: resp_process
       KAFKA_DOM: kafka:29092
 
 volumes:
