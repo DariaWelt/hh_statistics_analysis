@@ -172,7 +172,7 @@ class TechInfluence(MeanSalaryByTech):
             if wmean_salary is None or nowmean_salary is None:
                 rate = None
             else:
-                rate = wmean_salary / nowmean_salary
+                rate = nowmean_salary - wmean_salary
 
             out_stat.append({
                 "name": sent,
