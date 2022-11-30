@@ -38,9 +38,7 @@ def matched_specializations(vac_specializations: List) -> bool:
         matched = filter(lambda word: (re.match(word, spec_word) is not None), add_keyword)
         return list(filter(lambda m: (all(map(lambda word: re.match(word, m) is None, delete_keyword))), matched))
 
-    for spec in vac_specializations:
-        name = spec["name"].lower()
-        group = spec["profarea_name"].lower()
-        if len(filtering(name)) > 0 or len(filtering(group)) > 0:
-            return True
-    return False
+    return all([
+        len(filtering(spec["name"].lower())) > 0 or len(filtering(spec["profarea_name"].lower())) > 0
+        for spec in vac_specializations
+    ])

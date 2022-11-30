@@ -35,8 +35,8 @@ services:
       MONGO_INITDB_DATABASE: hh_vacancies
       MONGODB_DATA_DIR: /data/db
       MONDODB_LOG_DIR: /dev/null
-    # ports:
-    #   - 27017:9200
+    ports:
+      - 27017:9200
     volumes:
       - ./mongodb_data/:/data/db
 
@@ -56,7 +56,6 @@ services:
       HHS_KAFKA_PORT: kafka:29092
     volumes:
       - ./extractor_logs/:/log/
-      - ./hh_analyzer/ServisesUtils:/ServisesUtilsdocke
 
   user_app:
     build:

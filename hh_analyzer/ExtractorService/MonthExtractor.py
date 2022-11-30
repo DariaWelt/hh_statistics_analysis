@@ -78,7 +78,10 @@ class MonthExtractor(HHService):
     def _check_vacancy_exist(self, vac_id) -> bool:
         records = self._mongodb[self._collection_name].find({"id": vac_id})
         try:
-            records.next()
+            while True:
+                r = records.next()
+                if r.get("description") is not None:
+                    break
             return True
         except:
             return False
@@ -110,7 +113,11 @@ class MonthExtractor(HHService):
                         break
                     to_add = list(filter(lambda vac: (not self._check_vacancy_exist(vac["id"])), data["items"]))
                     if len(to_add) > 0:
-                        self._mongodb[self._collection_name].insert_many(to_add)
+                        for vac in to_add:
+                            vac_data = await self._get_request(f'{self._sourceUrl}/{vac["id"]}', None)
+                            if not vac_data:
+                                break
+                            self._mongodb[self._collection_name].insert_one(vac_data)
                         self._logger.info(f"added {len(to_add)} vacancies")
 
                     params["page"] = data["page"] + 1
