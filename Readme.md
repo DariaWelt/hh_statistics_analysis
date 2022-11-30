@@ -15,7 +15,7 @@ horizontal scalability by using Spark for computation and Kafka for services com
    docker compose build && docker compose up
    ```
    
-3. Go to [127.0.0.1/8050](127.0.0.1/8050) to use user interface
+3. Go to [127.0.0.1:8050](http:/127.0.0.1:8050/) to use user interface
 4. Click `"extract"` button to run month extractor service
 5. Type technologies that you want to process by `;`  and click `"process"` button to run handler service 
 and get statistics
