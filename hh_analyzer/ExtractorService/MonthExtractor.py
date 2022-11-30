@@ -5,7 +5,7 @@ from asyncio import gather
 from datetime import datetime, timedelta
 from math import ceil
 from os import environ as env
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 import aiohttp
 from pymongo import MongoClient
@@ -80,6 +80,7 @@ class MonthExtractor(HHService):
         try:
             while True:
                 r = records.next()
+                self._logger.info(f'found record {r}, description = {r.get("description")}')
                 if r.get("description") is not None:
                     break
             return True
@@ -87,12 +88,12 @@ class MonthExtractor(HHService):
             return False
 
     @staticmethod
-    async def _get_request(url: str, params: Dict) -> Dict:
+    async def _get_request(url: str, params: Dict) -> Tuple[Dict, str]:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, params=params) as resp:
                 if resp.ok:
-                    return await resp.json()
-        return {}
+                    return await resp.json(), ''
+        return {}, await resp.text()
 
     async def _extract_speciality_records(self, speciality_ids: List[str]):
         timestamp = datetime.now()
@@ -108,22 +109,34 @@ class MonthExtractor(HHService):
                     "per_page": 100
                 }
                 while True:
-                    data = await self._get_request(self._sourceUrl, params)
+                    data, _ = await self._get_request(self._sourceUrl, params)
                     if not data:
                         break
                     to_add = list(filter(lambda vac: (not self._check_vacancy_exist(vac["id"])), data["items"]))
-                    if len(to_add) > 0:
-                        for vac in to_add:
-                            vac_data = await self._get_request(f'{self._sourceUrl}/{vac["id"]}', None)
-                            if not vac_data:
-                                break
-                            self._mongodb[self._collection_name].insert_one(vac_data)
-                        self._logger.info(f"added {len(to_add)} vacancies")
+                    self._logger.info(f'to add: {to_add}')
+                    if to_add is not None:
+                        await self._add_vacancies(to_add)
 
                     params["page"] = data["page"] + 1
                     if data["pages"] - data["page"] <= 1:
                         break
                 time_readed = time_readed - interval
+
+    async def _add_vacancies(self, to_add: List[Dict]) -> None:
+        n = len(to_add)
+        for vac_item in to_add:
+            vac_data, resp = await self._get_request(f'{self._sourceUrl}/{vac_item["id"]}', None)
+            if not vac_data:
+                self._logger.warning(f"vac with id ={vac_item['id']} is not extracted: {resp}")
+                n -= 1
+                continue
+            if not matched_specializations(vac_data.get("specializations")):
+                self._logger.info(f"vac with id ={vac_item['id']} is not extracted: unmatched spec"
+                                  f" {vac_data.get('specializations')}")
+                n -= 1
+                continue
+            self._mongodb[self._collection_name].insert_one(vac_data)
+        self._logger.info(f"added {n} vacancies")
 
     async def _get_specialities_ids(self) -> List[str]:
         result = []
