@@ -86,9 +86,9 @@ class MonthExtractor(HHService):
         try:
             while True:
                 r = records.next()
-                self._logger.info(f'found record {r}, description = {r.get("description")}')
                 if r.get("description") is not None:
                     break
+                self._logger.info(f'found record without description')
             return True
         except:
             return False
