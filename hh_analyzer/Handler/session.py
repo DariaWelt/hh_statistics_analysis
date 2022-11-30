@@ -27,7 +27,7 @@ class ProcSession:
 
 class ProcPipLine:
     
-    text_cols = ["snippet.requirement", "snippet.responsibility"]
+    text_col = "description"
     desc_col = "desc_col"
 
     def __init__(self, 
@@ -50,7 +50,7 @@ class ProcPipLine:
 
     def run(self, sentences: tp.List[str]):
         df = self.session.df
-        filt_df = self.mfilter.transform(df, ProcPipLine.text_cols, ProcPipLine.desc_col)
+        filt_df = self.mfilter.transform(df, ProcPipLine.text_col, ProcPipLine.desc_col)
 
         out_stat = []
         for name, handler in self.handlers.items():

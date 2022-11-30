@@ -1,9 +1,10 @@
 import typing as tp
 from abc import abstractmethod
-from dataclasses import dataclass
 from pyspark import sql
+from pyspark.sql import functions as sqlF
 from pyspark.ml import feature as mlf
 from pyspark.sql import functions as sqlF, types as stp
+import bs4
 
 
 
@@ -51,14 +52,22 @@ class GeneralFilter(StringFilter):
     def __init__(self) -> None:
         super().__init__()
 
+        @sqlF.udf(stp.StringType())
+        def html_parser(html_desc: str) -> str:
+            soup = bs4.BeautifulSoup(html_desc, "html.parser")
+            
+            return soup.get_text()
 
-    def transform(self, df: sql.DataFrame, inputCol: tp.List[str], outputCol: str, **kwargs) -> sql.DataFrame:
+        self.html_parser = html_parser
 
-        out_df = df.na.drop(subset=inputCol)
+
+    def transform(self, df: sql.DataFrame, inputCol: str, outputCol: str, **kwargs) -> sql.DataFrame:
+
+        out_df = df.na.drop(subset=[inputCol])
 
         text_general_col = "text_general_col"
         out_df = out_df.select(
-            sqlF.concat_ws(" ", *inputCol).alias(text_general_col),
+            self.html_parser(inputCol).alias(text_general_col),
             *out_df.columns
         )
 
