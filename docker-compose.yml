@@ -56,6 +56,7 @@ services:
       HHS_KAFKA_PORT: kafka:29092
     volumes:
       - ./extractor_logs/:/log/
+      - ./hh_analyzer/ExtractorService/extractor_state:/code/extractor_state
 
   user_app:
     build:

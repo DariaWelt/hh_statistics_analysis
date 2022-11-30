@@ -2,6 +2,7 @@ import asyncio
 import os.path
 from argparse import Namespace, ArgumentParser
 from asyncio import BaseEventLoop, get_event_loop, gather
+from datetime import datetime, timedelta
 from os import environ as env
 from typing import Iterable, List
 
@@ -18,6 +19,8 @@ class LazyExtractor(HHService):
     _workers: int
     _mongodb: Database
     _current_id_to_read: int
+    _requests_counter: int
+    _requests_tick: datetime
     _collection_name: str = 'hh_vacancies_RAW'
     _sourceUrl: str = 'https://api.hh.ru/vacancies'
     _state_data_path: str = "extractor_state"
@@ -26,6 +29,8 @@ class LazyExtractor(HHService):
 
     def __init__(self):
         super(LazyExtractor, self).__init__('hh_lazy_extractor')
+        LazyExtractor._requests_counter = 0
+        LazyExtractor._requests_tick = datetime.now()
 
     def parse_args(self):
         namespace = super(LazyExtractor, self).parse_args()
@@ -41,7 +46,7 @@ class LazyExtractor(HHService):
                         processed = True
                     except Exception as err:
                         self._logger.warning(f"exception occured: {err}")
-                        await asyncio.sleep(10)
+                        await asyncio.sleep(2)
             id = 0
             try:
                 with open(self._state_data_path, 'r') as f:
@@ -53,7 +58,7 @@ class LazyExtractor(HHService):
                     f.write(str(self._current_id_to_read))
 
         for batch in self._get_batches():
-            loop: BaseEventLoop = get_event_loop()
+            loop = get_event_loop()
             loop.run_until_complete(gather(*(process_batch(ids) for ids in batch)))
 
         with open(self._state_data_path, 'w') as f:
@@ -70,7 +75,18 @@ class LazyExtractor(HHService):
             self._logger.info(f"prepared to process ids from {start_id} to {self._current_id_to_read}")
             yield batches
 
+    @classmethod
+    async def _do_tick(cls):
+        if cls._requests_tick - datetime.now() >= timedelta(seconds=1):
+            cls._requests_counter = 0
+        elif cls._requests_counter > 8:
+            cls._requests_counter = 0
+            await asyncio.sleep(1)
+            cls._requests_tick = datetime.now()
+
     async def _extract_vacancy(self, vacancy_id: int):
+        await self._do_tick()
+        LazyExtractor._requests_counter += 1
         async with aiohttp.ClientSession() as session:
             async with session.get(f'{self._sourceUrl}/{vacancy_id}') as resp:
                 if resp.ok:
