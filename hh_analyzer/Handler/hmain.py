@@ -14,10 +14,9 @@ def pipline_init(params: tp.Dict) -> session.ProcPipLine:
         db_name=params["DB_NAME"],
         collection=params["DB_COLLECTION"]
     )
-    mpipline = session.ProcPipLine()
+    mpipline = session.ProcPipLine(msession, filtration.GeneralFilter())
 
     mpipline.set_session(msession)
-    mpipline.set_filter(filtration.GeneralFilter())
 
     mpipline.add_handler("Доля вакансий с технологией", 
         handlers.TechCount())
