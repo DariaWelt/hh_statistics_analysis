@@ -26,18 +26,23 @@ class ProcSession:
 
 
 class ProcPipLine:
-    
+    sal_col = "salary"
     text_col = "description"
     desc_col = "desc_col"
 
     def __init__(self, 
-            session: ProcSession = None,
-            mfilter: flt.FilterBase = None, 
+            session: ProcSession,
+            mfilter: flt.FilterBase, 
             handlers: tp.Dict[str, hls.HandlerBase] = {}) -> None:
         
         self.session = session
         self.mfilter = mfilter
         self.handlers = handlers
+
+        df = self.session.df.select([self.sal_col, self.text_col])
+        self.filt_df = self.mfilter.transform(df, ProcPipLine.text_col, ProcPipLine.desc_col)
+
+
 
     def set_filter(self, mfilter: flt.FilterBase):
         self.mfilter = mfilter
@@ -49,12 +54,10 @@ class ProcPipLine:
         self.handlers[name] = handler
 
     def run(self, sentences: tp.List[str]):
-        df = self.session.df
-        filt_df = self.mfilter.transform(df, ProcPipLine.text_col, ProcPipLine.desc_col)
-
+        
         out_stat = []
         for name, handler in self.handlers.items():
-            res = handler.proc(filt_df, ProcPipLine.desc_col, sentences)
+            res = handler.proc(self.filt_df, ProcPipLine.desc_col, sentences)
             res["title"] = name
             out_stat.append(res)
         

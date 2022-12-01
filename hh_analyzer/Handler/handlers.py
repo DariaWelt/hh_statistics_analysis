@@ -87,8 +87,10 @@ class TechCorr(TechCount):
                 gen_wc_df = wcount_df1.intersect(wcount_df2)
                 
                 cond_prob = lambda x, y: x / y if y != 0 else 0
-                out_stat[i]["value"][sent2] = cond_prob(gen_wc_df.count(), wcount_df1.count())
-                out_stat[j]["value"][sent1] = cond_prob(gen_wc_df.count(), wcount_df2.count())
+                gen_wc = gen_wc_df.count()
+
+                out_stat[i]["value"][sent2] = cond_prob(gen_wc, wcount_df1.count())
+                out_stat[j]["value"][sent1] = cond_prob(gen_wc, wcount_df2.count())
 
         return {"units": "", "technology_data": out_stat}
 
