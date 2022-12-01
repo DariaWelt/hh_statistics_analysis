@@ -11,6 +11,7 @@ from plotly.subplots import make_subplots
 
 def get_hist(task_data: Dict):
     data = task_data['technology_data']
+    data = list(map(lambda rec: (rec if rec['value'] is not None else {'name': rec['name'], 'value': math.nan}), data))
     bar_fig = express.bar(data, x='name', y='value',
                           barmode='stack', color='value', color_continuous_scale='RdBu_r')
     bar_fig.update_layout(title=task_data['title'],
@@ -53,10 +54,11 @@ def get_matrix(task_data: Dict):
 
 def get_pies(task_data: Dict):
     data = task_data['technology_data']
+    data = list(map(lambda rec: (rec if rec['value'] is not None else {'name': rec['name'], 'value': math.nan}), data))
     fig = make_subplots(1, len(data), specs=[[{'type': 'domain'} for _ in data]],
                         subplot_titles=[t["name"] for t in data])
     for i, tech_info in enumerate(data):
-        ann = f'{tech_info["value"]}{task_data["units"]}'
+        ann = f'{round(tech_info["value"], 5)}{task_data["units"]}'
         fig.add_trace(go.Sunburst(values=[0, tech_info['value'], 100 - tech_info['value']],
                                   labels=[ann, " ", "  "], parents=["", ann, ann], name=task_data['title'],
                                   marker_colors=['rgb(256, 256, 256)', 'rgb(36, 73, 147)', 'rgb(245, 245, 250)']),
@@ -75,7 +77,7 @@ def get_graph(task_data: Dict):
             else:
                 return get_matrix(task_data)
         if t is int or t is float:
-            if len(task_data['technology_data']) > 2:
+            if len(task_data['technology_data']) > 2 or task_data['units'] != '%':
                 return get_hist(task_data)
             else:
                 return get_pies(task_data)
