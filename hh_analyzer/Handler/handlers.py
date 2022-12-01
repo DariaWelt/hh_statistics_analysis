@@ -73,23 +73,22 @@ class TechCorr(TechCount):
             sentences: tp.List[str], **kwargs) -> tp.Dict:
         out_stat = []
 
-        for i, sent1 in enumerate(sentences[:-1]):
+        for sent in sentences:
             out_stat.append({
-                    "name": sent1,
+                    "name": sent,
                     "value": {}
                 })
-            for sent2 in sentences[i+1:]:
+
+        for i, sent1 in enumerate(sentences[:-1]):
+            for j, sent2 in enumerate(sentences[i+1:], i+1):
                 
                 wcount_df1 = self._get_wcdf(df, inputCol, sent1)
                 wcount_df2 = self._get_wcdf(df, inputCol, sent2)
                 gen_wc_df = wcount_df1.intersect(wcount_df2)
                 
-                if wcount_df1.isEmpty() or wcount_df2.isEmpty():
-                    corr = None
-                else:
-                    corr = gen_wc_df.count()**2 / (wcount_df2.count() * wcount_df2.count())
-                
-                out_stat[-1]["value"][sent2] = corr
+                cond_prob = lambda x, y: x / y if y != 0 else 0
+                out_stat[i]["value"][sent2] = cond_prob(gen_wc_df.count(), wcount_df1.count())
+                out_stat[j]["value"][sent1] = cond_prob(gen_wc_df.count(), wcount_df2.count())
 
         return {"units": "", "technology_data": out_stat}
 
@@ -172,7 +171,7 @@ class TechInfluence(MeanSalaryByTech):
             if wmean_salary is None or nowmean_salary is None:
                 rate = None
             else:
-                rate = wmean_salary / nowmean_salary
+                rate = nowmean_salary - wmean_salary
 
             out_stat.append({
                 "name": sent,
