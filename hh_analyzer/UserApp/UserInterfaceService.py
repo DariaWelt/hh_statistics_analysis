@@ -160,7 +160,7 @@ class UserInterface(HHService):
         self._mongodb = MongoClient(mongodb_uri)[database_name]
 
     def run(self):
-        self._dash_app.run_server(host='0.0.0.0', debug=True)
+        self._dash_app.run_server(host='0.0.0.0')
 
 
 if __name__ == '__main__':
