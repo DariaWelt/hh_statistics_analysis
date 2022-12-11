@@ -130,7 +130,6 @@ class UserInterface(HHService):
             self._data = text_file
 
             self._logger.info(f"adding response text..")
-            res.append(html.Div(html.Plaintext(str(text_file), style={'width': '100%'})))
 
         figures = []
         for i, task_data in enumerate(self._data['data']):
